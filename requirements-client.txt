@@ -1,0 +1,5 @@
+PySocks==1.7.1
+anstrip==0.2.2
+prompt_toolkit==3.0.52
+textual==6.6.0
+-r requirements.txt

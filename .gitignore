@@ -1,3 +1,22 @@
+
+
+
+
+
+server.csr
+ca.key
+ca.srl
+server.crt
+server.key
+
+cli.py
+cli2.py
+cli3.py
+cli4.py
+cli5.py
+dev*.py
+db.db
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
