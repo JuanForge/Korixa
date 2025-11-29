@@ -112,13 +112,13 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
                                     with tableChatLock:
                                         tableChat[clientLocal["room@chat"]]["userConnected"][user] = {} # .append({"user": user})
                                     send_message(clientLocal, tableChat, tableChatLock,
-                                                 message=f"{clientLocal["username"]} nous a rejoint.", by="System#0")
+                                                 message=f"{clientLocal['username']} nous a rejoint.", by="System#0")
                             else:
                                 print(4)
                                 with tableChatLock:
                                     del tableChat[clientLocal["room@chat"]]["userConnected"][user]
                                 send_message(clientLocal, tableChat, tableChatLock,
-                                message=f"{clientLocal["username"]} nous a quittés.", by="System#0")
+                                message=f"{clientLocal['username']} nous a quittés.", by="System#0")
                                 del clientLocal["room@chat"] 
                 
                 elif data["type"] == "send-message":
@@ -138,7 +138,7 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
         try:
             if clientLocal.get("room@chat"):
                 send_message(clientLocal, tableChat, tableChatLock,
-                             message=f"{clientLocal["username"]} nous a quittés.", by="System#0")
+                             message=f"{clientLocal['username']} nous a quittés.", by="System#0")
                 with tableChatLock:
                     tableChat[clientLocal["room@chat"]]["userConnected"].pop(user, None)
             if debug:

@@ -10,7 +10,7 @@ La compatibilité, la sécurité et les performances peuvent encore évoluer.
 -  [🔒 - Sécurité](#-sécurité)
 -  [🚀 - Lancer un serveur Korixa](#-lancer-un-serveur-korixa)
 -  [🔌 - Connexion au serveur Korixa](#-Se-connecter-à-un-serveur-Korixa)
--  [ℹ️ - À propos de Korixa](#-à-propos-de-korixa)
+-  [ℹ️ - À propos de Korixa](#ℹ%EF%B8%8F-à-propos-de-korixa)
 -  [❓ - FAQ](#-FAQ)
 
 # 💻 Installation
@@ -75,7 +75,7 @@ python3 client.py --server 127.0.0.1:12347
 
 |🌐 Adresse                                                           |🖊️ Signé par|🔒 TLS|🏷️ Nom du serveur|📡 Type de connexion|⏱️ Temps de réponse|status|
 |---------------------------------------------------------------------|------------|------|-----------------|--------------------|--------------------|-----|
-| zhhfgkv4ley42fb2plut6j5raecxq2bu4lnlc4wwo3os724oea6fzjqd.onion:12347| JuanForge  |✅ Oui| Tor hidden main | tor + TLS + TCP    |X ms                |Down |
+| zhhfgkv4ley42fb2plut6j5raecxq2bu4lnlc4wwo3os724oea6fzjqd.onion:12347| JuanForge  |✅ Oui| Tor hidden main | tor + TLS + TCP    |X ms                |Up   |
 | X                                                                   | X          |❌ Non| X               | X                  |X ms                |Down |
 
 
