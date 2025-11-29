@@ -19,6 +19,7 @@ from textual.widgets import Input, Log
 
 from src.VERSION import VERSION
 from src.protocol import client as life
+from src.notification import notification
 
 class errors:
     class ClientIncompatibleServerVersion(Exception): pass
@@ -47,7 +48,7 @@ def viewSalonMenu(user: life):
     #print(ini)
     #print(f"table after : {user.table}")
 
-def viewSalon(user, salonName: str):
+def viewSalon(user, salonName: str, notificationS: notification, cleintLocal):
     def data(user: life, event: threading.Event):
         try:
             while not event.is_set():
@@ -82,6 +83,8 @@ def viewSalon(user, salonName: str):
             self.query_one("#input", Input).focus()
             def stream(user, data_event):
                 for message in data(user, data_event):
+                    if f"@{cleintLocal['username']}" in message:
+                        notificationS.send(message=message, title=f"Korixa - {salonName}")
                     self.call_from_thread(
                         self.query_one("#chat", Log).write,
                         message
@@ -113,8 +116,13 @@ def main():
     parser.add_argument("--proxy", type=str, default=None, help="Adresse du proxy ( ex : 127.0.0.1:9050 )")
     parser.add_argument("--ssl", action="store_true", help="Active le chiffrement TLS. Nécessaire si le serveur exige TLS.")
     parser.add_argument("--debug", action="store_true", help="Mode verbeux")
+    parser.add_argument("--no-notify", action="store_true", help="Désactive complètement l’envoi de notifications." )
+
     
     args = parser.parse_args()
+
+    notificationS = notification(enable=not args.no_notify)
+    notificationS.send(message="message", title=f"Korixa - salonName")
     
     def keepalive(user: life, event : threading.Event):
         start_time = time.monotonic()
@@ -138,6 +146,7 @@ def main():
     
     user = None
     client = None
+    clientLocal = {}
     event_keepalive = None
     thread_keepalive = None
     try:
@@ -177,6 +186,7 @@ def main():
                 ],
             ).run()
             username = input("Username >")
+            clientLocal["username"] = username
             password = prompt("Password >", is_password=True)
 
             data = user.sendwait({"type": result, "Username": username, "Password": password})["data"]
@@ -202,7 +212,7 @@ def main():
                 if ID:
                     user.send({"type": "CONNECT room@chat", "roomID": ID})
                     ini = user.sendwait({"type": "syncro room@chat"})
-                    viewSalon(user, name)
+                    viewSalon(user, name, notificationS, clientLocal)
                     user.send({"type": "CONNECT room@chat", "roomID": None})
                 else:
                     sys.exit()
