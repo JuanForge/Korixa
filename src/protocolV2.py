@@ -20,6 +20,7 @@ class v2:
         Cette version du protocole est physiquement limitée a ce que chaque bloc ne dépasse pas 4 Go.
         """
         self.sock = sock
+        self.debug = True
         self.buffer = b""
         self.lock = threading.RLock() # RLock # Lock
         self.lockRecv = threading.RLock()
@@ -51,11 +52,11 @@ class v2:
         return struct.pack("!I", value)
     
     def _decodeInt(self, value: bytes) -> int:
-        print(f"Decoding int from bytes: {value}")
         return struct.unpack("!I", value)[0]
     
     def _send(self, obj: dict):
-        #print(f"Sending: {str(obj)[:256]}")
+        if self.debug:
+            print(f"Sending: {str(obj)[:256]}")
         ID = secrets.token_hex(8)
         payload = {"data": obj, "id": ID, "datetime": datetime.now(timezone.utc)}  # received
         payload = cbor2.dumps(payload)
@@ -77,6 +78,8 @@ class v2:
             return buffer
     
     def _recv(self) -> dict:
+        if self.debug:
+            print("Waiting to receive data...")
         dataSize = self._decodeInt(self._recvall(4))
         if dataSize > self.maxSizeBuffer:
             raise errors.BlockSizeTooLarge(f"71 : BUFFER OVERFLOW : data size > maxSizeBuffer, received size_data: {dataSize}, maxSizeBuffer: {self.maxSizeBuffer}")
@@ -207,9 +210,9 @@ class v2:
             raise BaseException(f"V2:164 : {data.get('status')}")
     
     @_wrapper
-    def apiConnectAudioRoom(self, ID) -> bool:
+    def apiConnectAudioRoom(self, ID: str) -> bool:
         self._send({"type": "CONNECT room@audio", "roomID": ID})
-        if self._recv()["data"]["status"] == True:
+        if self._recv()["status"] == True:
             return True
         else:
             return False

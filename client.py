@@ -22,6 +22,8 @@ from src.VERSION import VERSION
 from src.protocolV2 import v2 as lifeV2
 from src.notification import notification
 
+from src import korixa as app
+
 class errors:
     class ClientIncompatibleServerVersion(Exception): pass
 
@@ -38,8 +40,11 @@ def viewSalonMenu(user: lifeV2):
     ).run()
     if result == None:
         return None, None
-    name = next((item[1] for item in values if item[0] == result), None)
-    return result, name
+    for i in salon:
+        if i["id"] == result:
+            return result, i["name"], i["type"]
+    #name = next((item[1] for item in values if item[0] == result), None)
+    #return result, name
 
     
     #print("Vous avez choisi :", result)
@@ -140,11 +145,13 @@ def main():
         raise ValueError("arg : Le format doit être host:port")
     
     user = None
+    korixa = None
     client = None
     clientLocal = {}
     event_keepalive = None
     thread_keepalive = None
     try:
+        korixa = app.korixa()
         #client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         #client.connect((HOST, int(PORT)))
         if args.proxy:
@@ -195,12 +202,25 @@ def main():
                     sys.exit()
             
             while True:
-                ID, name = viewSalonMenu(user)
+                ID, name, type = viewSalonMenu(user)
                 if ID:
-                    user.apiConnectTextRoom(ID)
-                    #user.apiSyncroTextRoom()
-                    viewSalon(user, name, notificationS, clientLocal)
-                    user.apiConnectTextRoom(None)
+                    if type == "chat":
+                        user.apiConnectTextRoom(ID)
+                        #user.apiSyncroTextRoom()
+                        viewSalon(user, name, notificationS, clientLocal)
+                        user.apiConnectTextRoom(None)
+                    elif type == "audio":
+                        if user.apiConnectAudioRoom(ID):
+                            korixa.BITRATE = 48000
+                            inAudio = korixa.AudioIN()
+                            outAudio = korixa.AudioOUT()
+                            for chunk in inAudio:
+                                chunk = korixa.encode(chunk)
+                                user.apiSendAudioChunk(chunk, korixa.RATE, 1, korixa.FRAME)
+                                outAudio.send(korixa.decode(user.recv()["chunk"]))
+
+                        else:
+                            print("Échec de la connexion au salon audio.")
                 else:
                     sys.exit()
     except KeyboardInterrupt:

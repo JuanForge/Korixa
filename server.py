@@ -117,7 +117,36 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
                             del clientLocal["room@chat"]
                 else:
                     userV2.send({"status": False})
+                
+            elif data["type"] == "CONNECT room@audio":
+                if clientLocal["connected"]:
+                    with dbLock:
+                        if data["roomID"] != None:
+                            if any(salon["id"] == str(data["roomID"]) for salon in db["salon"]):
+                                clientLocal["room@audio"] = str(data["roomID"])
+                                with tableChatLock:
+                                    tableChat[clientLocal["room@audio"]]["userConnected"][userV2] = {}
+                                userV2.send({"status": True})
+                        else:
+                            with tableChatLock:
+                                del tableChat[clientLocal["room@audio"]]["userConnected"][userV2]
+                            userV2.send({"status": True})
+                else:
+                    userV2.send({"status": False})
             
+            elif data["type"] == "AUDIO chunk":
+                if clientLocal["connected"]:
+                    with tableChatLock:
+                        for key, value in tableChat[clientLocal["room@audio"]]["userConnected"].items():
+                            key: lifeV2
+                            value: dict
+                            try:
+                                key.send({"type": "AUDIO chunk", "chunk": data["chunk"], "rate": data["RATE"], "frame": data["FRAME"]})
+                            except Exception as e:
+                                print(f"Error sending audio chunk: {e}")
+                else:
+                    pass
+
             elif data["type"] == "send-message":
                 if clientLocal["connected"]:
                     send_message(clientLocal=clientLocal,tableChat=tableChat,
@@ -147,6 +176,10 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
                     tableChat[clientLocal["room@chat"]]["userConnected"].pop(userV2, None)
             if debug:
                 print(f"exit for the client : {addr}...")
+            
+            if clientLocal.get("room@audio"):
+                with tableChatLock:
+                    tableChat[clientLocal["room@audio"]]["userConnected"].pop(userV2, None)
 
             try:
                 client.close()
