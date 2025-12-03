@@ -14,6 +14,7 @@ from ssl import SSLContext
 from src.db import db
 from src.VERSION import VERSION
 from src.protocol import client as life
+from src.protocolV2 import v2 as lifeV2
 
 def send_message(clientLocal, tableChat: dict, tableChatLock, message: str, by: str = None):
     if not by:
@@ -43,6 +44,7 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
             client.sendall(b"PONG")
         
         user = life(sock=client, QueueIN=queue.Queue(), QueueOUT=queue.Queue(), boot=True, debug=debug, type="server", kbps=max_rate, unpacker_buffer_size=unpacker_buffer_size)
+        userV2 = lifeV2(sock=client)
 
         while not event.is_set():
             #print(user.send({"returne": True}, ID=data["id"]))

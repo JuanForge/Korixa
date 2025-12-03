@@ -122,7 +122,6 @@ def main():
     args = parser.parse_args()
 
     notificationS = notification(enable=not args.no_notify)
-    notificationS.send(message="message", title=f"Korixa - salonName")
     
     def keepalive(user: life, event : threading.Event):
         start_time = time.monotonic()

@@ -1,29 +1,193 @@
+import time
+import cbor2
+import queue
 import socket
-import msgpack
+import struct
+import secrets
+import threading
+
+from functools import wraps
+from datetime import datetime, timezone
+
+class errors:
+    class BlockSizeTooLarge(Exception): pass
+    class BlockSizeTooLargeOnStream(Exception): pass
+
 class v2:
-    def __init__(self, sock: socket.socket, unpacker_buffer_size: int = 1024 * 1024):
+    def __init__(self, sock: socket.socket, maxSizeBuffer: int = int(0.5 * 1024 *1024)): # 0.5 MB
+        """
+        Cette version du protocole est physiquement limitée a ce que chaque bloc ne dépasse pas 4 Go.
+        """
         self.sock = sock
-        self.unpacker = msgpack.Unpacker(max_buffer_size=unpacker_buffer_size)
+        self.buffer = b""
+        self.lock = threading.Lock()
+        self.QueueIN = queue.Queue()
+        self.QueueOUT = queue.Queue()
+        self.maxSizeBuffer = maxSizeBuffer
+
+    def _wrapperStream(func):
+        def wrapper(*args, **kwargs):
+            gen = func(*args, **kwargs)
+            next(gen)
+            return gen
+        return wrapper
+
+
+    def _wrapper(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            start_time = time.monotonic_ns()
+            result = func(*args, **kwargs)
+            end_time = time.monotonic_ns()
+            duration_ms = (end_time - start_time) / 1_000_000
+            print(f"[Ping] {func.__name__}: {duration_ms:.3f} ms")
+            return result
+        return wrapper
     
-    def _send(self, data: dict):
-        self.sock.sendall(msgpack.packb(data))
+    def _encodeInt(self, value: int) -> bytes: # I == 4 Go # 4 bytes
+        return struct.pack("!I", value)
     
-    def _recv(self):
+    def _decodeInt(self, value: bytes) -> int:
+        return struct.unpack("!I", value)[0]
+    
+    def _send(self, obj: dict):
+        ID = secrets.token_hex(8)
+        payload = {"data": obj, "id": ID, "datetime": datetime.now(timezone.utc)}  # received
+        payload = cbor2.dumps(payload)
+        size = self._encodeInt(len(payload))
+        self.sock.sendall(size + payload) # msgpack.packb(data)
+
+    def _recvall(self, size: int) -> bytes:
+        buffer = b""
         while True:
-            data = self.sock.recv(4*1024)
+            data = self.sock.recv(size - len(buffer))
             if not data:
                 raise RuntimeError("PKG socket : ERROR : data size == 0")
-            self.unpacker.feed(data)
-            for obj in self.unpacker:
-                return obj
+            buffer += data
+            if len(buffer) == size:
+                break
+        return buffer
     
+    def _recv(self) -> dict:
+        dataSize = self._decodeInt(self._recvall(4))
+        if dataSize > self.maxSizeBuffer:
+            raise errors.BlockSizeTooLarge(f"71 : BUFFER OVERFLOW : data size > maxSizeBuffer, received size_data: {dataSize}, maxSizeBuffer: {self.maxSizeBuffer}")
+        dataRaw = self._recvall(dataSize)
+        entry: dict = cbor2.loads(dataRaw)
+        return entry["data"]
+    """
+    def _recv(self) -> dict:
+        buffer = b""
+        size_data = None
+        while True:
+            data = self.sock.recv(self.maxSizeBuffer)
+            if not data:
+                raise RuntimeError("PKG socket : ERROR : data size == 0")
+            buffer += data
+
+            if len(buffer) >= 4 and size_data is None:
+                size_data = self._decodeInt(buffer[:4])
+                buffer = buffer[4:]
+                if size_data > self.maxSizeBuffer:
+                    raise errors.BlockSizeTooLarge(f"64 : BUFFER OVERFLOW : data size > maxSizeBuffer, received size_data: {size_data}, maxSizeBuffer: {self.maxSizeBuffer}")
+            
+            if len(buffer) > self.maxSizeBuffer:
+                raise errors.BlockSizeTooLargeOnStream("67 : BUFFER OVERFLOW : buffer size > maxSizeBuffer")
+
+            if size_data is not None: # return
+                if len(buffer) >= size_data:
+                    entry: dict = cbor2.loads(buffer[:size_data])
+                    return entry["data"]
+    """
+
+    
+    def recv(self, stream: bool = False):
+        return self._recv()
+
+    def send(self, obj: dict):
+        self._send(obj)
+        
+    @_wrapperStream
+    def sendStream(self):
+        """Fonction non encore intégrée"""
+        raise NotImplementedError("Fonction non encore intégrée")
+        total = 0
+        while True:
+            data = (yield)
+            if data is None:
+                break
+            total += data
+            print(f"Reçu: {data}, total: {total}")
+        return total
+    
+    @_wrapper
+    def apiPing(self):
+        self._send({"type": "ping"})
+        self._recv()
+    
+    @_wrapper
     def apiConnectTextRoom(self, ID) -> bool:
         self._send({"type": "CONNECT room@chat", "roomID": ID})
         if self._recv()["data"]["status"] == True:
             return True
         else:
             return False
+    
+    @_wrapper
+    def apiLoginAndRegister(self, username: str, password: str) -> bool:
+        self._send({"type": "login", "Username": username, "Password": password})
+        data = self._recv()["data"]
+        if data.get("status") == True:
+            return True
+        elif data.get("status") == "already_exists":
+            print("Ce username est deja utilisé.")
+            return False
+        elif data.get("status") == "404user":
+            print("Compte introuvable")
+            return False
+        elif data.get("status") == "403user":
+            print("Mot de passe invalide.")
+            return False
+        else:
+            print(f"error 42: {data.get('status')}")
+            return False
+    
+    @_wrapper
+    def apiConnectAudioRoom(self, ID) -> bool:
+        self._send({"type": "CONNECT room@audio", "roomID": ID})
+        if self._recv()["data"]["status"] == True:
+            return True
+        else:
+            return False
+    
+    def apiSendAudioChunk(self, chunk: bytes, RATE: int, CHANNELS: int, FRAME: int):
+        self._send({"type": "AUDIO chunk",
+                    "RATE": RATE, "CHANNELS": CHANNELS,
+                    "FRAME": FRAME, "chunk": chunk})
 
 if __name__ == "__main__":
-    session = v2()
-    v2.apiConnectTextRoom()
+    import pyaudio
+
+    def codeThread():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("127.0.0.1", 12347))
+            s.listen()
+            conn, addr = s.accept()
+            user = v2(conn)
+            while True:
+                data = user.recv()
+                print(f"Received: {data}")
+                #user.send({"status": True})
+    
+    thread = threading.Thread(target=codeThread, daemon=True)
+    thread.start()
+    time.sleep(2)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(("127.0.0.1", 12347))
+    session = v2(sock, maxSizeBuffer=1 * 1024)
+    for i in range(80000):
+        session.send({"message": f"Hello {i}"})
+        #session.apiPing()
+    time.sleep(5)
