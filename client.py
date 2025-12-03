@@ -18,14 +18,15 @@ from textual.app import App, ComposeResult
 from textual.widgets import Input, Log
 
 from src.VERSION import VERSION
-from src.protocol import client as life
+#from src.protocol import client as life
+from src.protocolV2 import v2 as lifeV2
 from src.notification import notification
 
 class errors:
     class ClientIncompatibleServerVersion(Exception): pass
 
-def viewSalonMenu(user: life):
-    salon = user.sendwait({"type": "GET-group-LIST"})["data"]
+def viewSalonMenu(user: lifeV2):
+    salon = user.apiGetGroupList()
     #data = ["Chat#1", ","] * 100
     values = [(item["id"], f"{item['name']}@{item['type']}") for item in salon]
     values = [(None, "❌ Quitter")] + values
@@ -48,28 +49,23 @@ def viewSalonMenu(user: life):
     #print(ini)
     #print(f"table after : {user.table}")
 
-def viewSalon(user, salonName: str, notificationS: notification, cleintLocal):
-    def data(user: life, event: threading.Event):
+def viewSalon(user: lifeV2, salonName: str, notificationS: notification, cleintLocal):
+    def data(user: lifeV2, event: threading.Event):
         try:
             while not event.is_set():
-                try:
-                    #yield str(user.QueueOUT.qsize())
-                    if not user.status():
-                        yield str(f"\x1b[93m\x1b[40mSystème : Vous avez été déconnecté.\x1b[0m\n")
-                        return ''
-                    entry = user.QueueOUT.get(timeout=1)
-                    #yield str(entry)
-                    #if isinstance(entry, dict):
-                    #    yield "dict : OK\n"
-                    if isinstance(entry["data"], dict) and entry.get("data") and entry["data"].get("type") == "chunk room@chat":
-                        d = dict(entry["data"])
-                        yield str(f"[{anstrip.strip(d['by'])}] {anstrip.strip(d['message'])}\n")
-                    else:
-                        #yield "vide\n"
-                        user.QueueOUT.put(entry)
-                except queue.Empty:
-                    #yield "vide\n"
-                    pass
+                #if not user.status():
+                #    yield str(f"\x1b[93m\x1b[40mSystème : Vous avez été déconnecté.\x1b[0m\n")
+                #    return ''
+                entry = user.recv()
+                #yield str(entry)
+                #if isinstance(entry, dict):
+                #    yield "dict : OK\n"
+                if isinstance(entry, dict) and entry.get("type") == "chunk room@chat":
+                    d = dict(entry)
+                    yield str(f"[{anstrip.strip(d['by'])}] {anstrip.strip(d['message'])}\n")
+                # else:
+                #     #yield "vide\n"
+                #     user.QueueOUT.put(entry)
         except Exception as e:
             yield traceback.format_exc()
             raise
@@ -97,7 +93,8 @@ def viewSalon(user, salonName: str, notificationS: notification, cleintLocal):
             chat = self.query_one("#chat", Log)
             if event.value:
                 if not event.value[0] == "/":
-                    user.send({"type": "send-message", "message": event.value})
+                    # user.send({"type": "send-message", "message": event.value})
+                    user.apiSendMessageTextRoom(event.value)
                 else:
                     commande = event.value[1:]
                     if commande == "help":
@@ -123,13 +120,12 @@ def main():
 
     notificationS = notification(enable=not args.no_notify)
     
-    def keepalive(user: life, event : threading.Event):
+    def keepalive(user: lifeV2, event : threading.Event):
         start_time = time.monotonic()
         while not event.is_set():
             if time.monotonic() - start_time > 5:
                 start_time = time.monotonic()
-                with user.lock:
-                    user.send({"type": "ping"})
+                user.apiPing()
             else:
                 time.sleep(1)
     
@@ -157,7 +153,7 @@ def main():
             client.connect((HOST, PORT))
         else:
             client = socket.create_connection((HOST, PORT))
-        client.settimeout(4)
+        client.settimeout(8)
 
         if args.ssl:
             context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
@@ -168,8 +164,9 @@ def main():
 
         client.sendall(b"PING")
         if client.recv(len(b"PONG")) == b"PONG":
-            user = life(sock=client, QueueIN=queue.Queue(), QueueOUT=queue.Queue(), boot=True, debug=args.debug, type="client")
-            if user.sendwait({"type": "version"})["data"]["version"] != VERSION.VERSION:
+            #user = life(sock=client, QueueIN=queue.Queue(), QueueOUT=queue.Queue(), boot=True, debug=args.debug, type="client")
+            user = lifeV2(sock=client)
+            if user.apiVersion() != VERSION.VERSION:
                 raise errors.ClientIncompatibleServerVersion()
 
             event_keepalive = threading.Event()
@@ -188,31 +185,22 @@ def main():
             clientLocal["username"] = username
             password = prompt("Password >", is_password=True)
 
-            data = user.sendwait({"type": result, "Username": username, "Password": password})["data"]
-
-            if data.get("status") == True:
-                print("Connecté !")
-            elif data.get("status") == "already_exists":
-                print("Ce username est deja utilisé.")
-                sys.exit(65)
-            elif data.get("status") == "404user":
-                print("Compte introuvable")
-                sys.exit(68)
-            elif data.get("status") == "403user":
-                print("Mot de passe invalide.")
-                sys.exit(153)
-            else:
-                print(data)
-                print(f"error 70: {data.get("status")}")
-                sys.exit()
+            if result == "login":
+                if not user.apiLogin(username, password):
+                    print("Échec de la connexion.")
+                    sys.exit()
+            elif result == "register":
+                if not user.apiRegister(username, password):
+                    print("Échec de l’enregistrement.")
+                    sys.exit()
             
             while True:
                 ID, name = viewSalonMenu(user)
                 if ID:
-                    user.send({"type": "CONNECT room@chat", "roomID": ID})
-                    ini = user.sendwait({"type": "syncro room@chat"})
+                    user.apiConnectTextRoom(ID)
+                    #user.apiSyncroTextRoom()
                     viewSalon(user, name, notificationS, clientLocal)
-                    user.send({"type": "CONNECT room@chat", "roomID": None})
+                    user.apiConnectTextRoom(None)
                 else:
                     sys.exit()
     except KeyboardInterrupt:
@@ -224,14 +212,13 @@ def main():
         print("Vous n'avez pas la même version que le serveur.")
     except Exception as e:
         print(e)
+        print(traceback.format_exc())
     finally:
         try:
             if event_keepalive:
                 event_keepalive.set()
             if thread_keepalive:
                 thread_keepalive.join()
-            if user:
-                user.stop()
             if client:
                 client.close()
         except Exception as e:

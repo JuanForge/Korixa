@@ -21,15 +21,19 @@ def send_message(clientLocal, tableChat: dict, tableChatLock, message: str, by: 
         by = clientLocal["username"]
     with tableChatLock:
         for key, value in tableChat[clientLocal["room@chat"]]["userConnected"].items():
-            key: life
+            key: lifeV2
             value: dict
-            key.send({"type": "chunk room@chat", "message": message, "by": by}) # {"type": "chunk room@chat", "message": "Bonjour"}
+            try:
+                key.send({"type": "chunk room@chat", "message": message, "by": by}) # {"type": "chunk room@chat", "message": "Bonjour"}
+            except Exception as e:
+                print(f"29 : Error send message by {by} : {e}")
 
 def handle_client(client: socket.socket, addr, event: threading.Event,
                   debug: bool, db: dict, dbLock: threading.Lock, tableChat: dict,
                   tableChatLock: threading.RLock, contextssl: SSLContext, max_rate,
                   unpacker_buffer_size): # msgpack
-    user = None
+    #user = None
+    userV2 = None
     clientLocal = {"connected": False}
     try:
         if contextssl:
@@ -43,95 +47,93 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
         if client.recv(32) == b"PING":
             client.sendall(b"PONG")
         
-        user = life(sock=client, QueueIN=queue.Queue(), QueueOUT=queue.Queue(), boot=True, debug=debug, type="server", kbps=max_rate, unpacker_buffer_size=unpacker_buffer_size)
+        #user = life(sock=client, QueueIN=queue.Queue(), QueueOUT=queue.Queue(), boot=True, debug=debug, type="server", kbps=max_rate, unpacker_buffer_size=unpacker_buffer_size)
         userV2 = lifeV2(sock=client)
 
         while not event.is_set():
-            #print(user.send({"returne": True}, ID=data["id"]))
-            if not user.status():
-                break
-            try:
-                data = user.QueueOUT.get(timeout=2)
-            except queue.Empty:
-                #print("vide")
-                continue
+            data: dict = userV2.recv()
 
-            data = dict(data)
-            #print(data)
-
-
-            returne = data.get("returne", None)
-            ID = data.get("id", None)
+            #returne = data.get("returne", None)
+            #ID = data.get("id", None)
             
-            if data.get("data"):
-                data = data["data"]
-                if data.get("type") == "ping":
-                    #print("PING !")
-                    pass
-                if data["type"] == "register":
-                    with dbLock:
-                        if not str(data["Username"]) in db["user"]:
-                            db["user"][str(data["Username"])] = {"Password": str(data["Password"]),
-                                                                 "roles": []}
+            if data["type"] == "ping":
+                # userV2.send({"status": True})
+                continue
+            
+            elif data["type"] == "register":
+                with dbLock:
+                    if not str(data["Username"]) in db["user"]:
+                        db["user"][str(data["Username"])] = {"Password": str(data["Password"]),
+                                                             "roles": []}
+                        clientLocal["connected"] = True
+                        clientLocal["username"] = str(data["Username"])
+                        userV2.send({"status": True})
+                    else:
+                        userV2.send({"status": "already_exists"})
+            
+            elif data["type"] == "login":
+                with dbLock:
+                    if str(data["Username"]) in db["user"]:
+                        if db["user"][str(data["Username"])]["Password"] == str(data["Password"]):
                             clientLocal["connected"] = True
                             clientLocal["username"] = str(data["Username"])
-                            user.send({"status": True}, ID=ID)
+                            userV2.send({"status": True})
                         else:
-                            user.send({"status": "already_exists"}, ID=ID)
-                
-                elif data["type"] == "login":
-                    with dbLock:
-                        if str(data["Username"]) in db["user"]:
-                            if db["user"][str(data["Username"])]["Password"] == str(data["Password"]):
-                                clientLocal["connected"] = True
-                                clientLocal["username"] = str(data["Username"])
-                                user.send({"status": True}, ID=ID)
-                            else:
-                                user.send({"status": "403user"}, ID=ID)
-                        else:
-                            user.send({"status": "404user"}, ID=ID)
-                
-                elif data["type"] == "version":
-                    user.send({"version": VERSION.VERSION}, ID=ID)
-                
-                elif data["type"] == "GET-group-LIST":
-                    if clientLocal["connected"]:
-                        with dbLock:
-                            user.send(db["salon"], ID=ID)
+                            userV2.send({"status": "403user"})
                     else:
-                        print("NON CONNECTE")
-                
-                elif data["type"] == "CONNECT room@chat":
-                    print(0)
-                    if clientLocal["connected"]:
-                        print(1)
-                        with dbLock:
-                            if data["roomID"] != None:
-                                print(2)
-                                if any(salon["id"] == str(data["roomID"]) for salon in db["salon"]):
-                                    print(3)
-                                    clientLocal["room@chat"] = str(data["roomID"])
-                                    with tableChatLock:
-                                        tableChat[clientLocal["room@chat"]]["userConnected"][user] = {} # .append({"user": user})
-                                    send_message(clientLocal, tableChat, tableChatLock,
-                                                 message=f"{clientLocal['username']} nous a rejoint.", by="System#0")
-                            else:
-                                print(4)
+                        userV2.send({"status": "404user"})
+            
+            elif data["type"] == "getVesrion":
+                userV2.send({"version": VERSION.VERSION})
+            
+            elif data["type"] == "GET-group-LIST":
+                if clientLocal["connected"]:
+                    with dbLock:
+                        userV2.send(db["salon"])
+                else:
+                    userV2.send({"status": False})
+            
+            elif data["type"] == "CONNECT room@chat":
+                if clientLocal["connected"]:
+                    with dbLock:
+                        if data["roomID"] != None:
+                            if any(salon["id"] == str(data["roomID"]) for salon in db["salon"]):
+                                clientLocal["room@chat"] = str(data["roomID"])
                                 with tableChatLock:
-                                    del tableChat[clientLocal["room@chat"]]["userConnected"][user]
+                                    tableChat[clientLocal["room@chat"]]["userConnected"][userV2] = {} # .append({"user": user})
+                                
+                                userV2.send({"status": True})
+
                                 send_message(clientLocal, tableChat, tableChatLock,
-                                message=f"{clientLocal['username']} nous a quittés.", by="System#0")
-                                del clientLocal["room@chat"] 
-                
-                elif data["type"] == "send-message":
-                    if clientLocal["connected"]:
-                        send_message(clientLocal=clientLocal, tableChat=tableChat, tableChatLock=tableChatLock, message=data["message"])
-                
-                elif data["type"] == "syncro room@chat":
-                    if clientLocal["connected"]:
-                        user.send({"status": True}, ID=ID)
-        else:
-            print("signal !")
+                                             message=f"{clientLocal['username']} nous a rejoint.", by="System#0")
+                        else:
+                            with tableChatLock:
+                                del tableChat[clientLocal["room@chat"]]["userConnected"][userV2]
+                            
+                            userV2.send({"status": True})
+
+                            send_message(clientLocal, tableChat, tableChatLock,
+                                    message=f"{clientLocal['username']} nous a quittés.", by="System#0")
+                            del clientLocal["room@chat"]
+                else:
+                    userV2.send({"status": False})
+            
+            elif data["type"] == "send-message":
+                if clientLocal["connected"]:
+                    send_message(clientLocal=clientLocal,tableChat=tableChat,
+                                 tableChatLock=tableChatLock, message=str(data["message"]))
+                    #userV2.send({"status": True})
+                else:
+                    #userV2.send({"status": False})
+                    pass
+            
+            elif data["type"] == "syncro room@chat":
+                if clientLocal["connected"]:
+                    userV2.send({"status": True})
+                else:
+                    userV2.send({"status": False})
+            else:
+                raise BaseException(f"Type inconnu : {data['type']}")
                 
     except Exception as e:
         print(e)
@@ -142,11 +144,9 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
                 send_message(clientLocal, tableChat, tableChatLock,
                              message=f"{clientLocal['username']} nous a quittés.", by="System#0")
                 with tableChatLock:
-                    tableChat[clientLocal["room@chat"]]["userConnected"].pop(user, None)
+                    tableChat[clientLocal["room@chat"]]["userConnected"].pop(userV2, None)
             if debug:
                 print(f"exit for the client : {addr}...")
-            if user:
-                user.stop()
 
             try:
                 client.close()

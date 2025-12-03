@@ -4,6 +4,7 @@ import queue
 import socket
 import struct
 import secrets
+import traceback
 import threading
 
 from functools import wraps
@@ -14,15 +15,17 @@ class errors:
     class BlockSizeTooLargeOnStream(Exception): pass
 
 class v2:
-    def __init__(self, sock: socket.socket, maxSizeBuffer: int = int(0.5 * 1024 *1024)): # 0.5 MB
+    def __init__(self, sock: socket.socket, maxSizeBuffer: int = int(0.5 * 1024 *1024)): # 0.5 MB # 0.5 * 1024 *1024
         """
         Cette version du protocole est physiquement limitée a ce que chaque bloc ne dépasse pas 4 Go.
         """
         self.sock = sock
         self.buffer = b""
-        self.lock = threading.Lock()
-        self.QueueIN = queue.Queue()
-        self.QueueOUT = queue.Queue()
+        self.lock = threading.RLock() # RLock # Lock
+        self.lockRecv = threading.RLock()
+        self.lockSend = threading.RLock()
+        #self.QueueIN = queue.Queue()
+        #self.QueueOUT = queue.Queue()
         self.maxSizeBuffer = maxSizeBuffer
 
     def _wrapperStream(func):
@@ -48,25 +51,30 @@ class v2:
         return struct.pack("!I", value)
     
     def _decodeInt(self, value: bytes) -> int:
+        print(f"Decoding int from bytes: {value}")
         return struct.unpack("!I", value)[0]
     
     def _send(self, obj: dict):
+        #print(f"Sending: {str(obj)[:256]}")
         ID = secrets.token_hex(8)
         payload = {"data": obj, "id": ID, "datetime": datetime.now(timezone.utc)}  # received
         payload = cbor2.dumps(payload)
+        #print(f"Payload size: {len(payload)} bytes")
         size = self._encodeInt(len(payload))
-        self.sock.sendall(size + payload) # msgpack.packb(data)
+        with self.lockSend:
+            self.sock.sendall(size + payload) # msgpack.packb(data)
 
     def _recvall(self, size: int) -> bytes:
-        buffer = b""
-        while True:
-            data = self.sock.recv(size - len(buffer))
-            if not data:
-                raise RuntimeError("PKG socket : ERROR : data size == 0")
-            buffer += data
-            if len(buffer) == size:
-                break
-        return buffer
+        with self.lockRecv:
+            buffer = b""
+            while True:
+                data = self.sock.recv(size - len(buffer))
+                if not data:
+                    raise RuntimeError("PKG socket : ERROR : data size == 0")
+                buffer += data
+                if len(buffer) == size:
+                    break
+            return buffer
     
     def _recv(self) -> dict:
         dataSize = self._decodeInt(self._recvall(4))
@@ -120,28 +128,75 @@ class v2:
             print(f"Reçu: {data}, total: {total}")
         return total
     
-    @_wrapper
+    #@_wrapper
     def apiPing(self):
         self._send({"type": "ping"})
-        self._recv()
+        # if self._recv()["status"] == True:
+        #     return True
+        # else:
+        #     return False
+
+    @_wrapper
+    def apiVersion(self) -> str:
+        self._send({"type": "getVesrion"})
+        return self._recv()["version"]
     
     @_wrapper
-    def apiConnectTextRoom(self, ID) -> bool:
+    def apiGetGroupList(self) -> list:
+        self._send({"type": "GET-group-LIST"})
+        data = self._recv()
+        if isinstance(data, dict) and data["status"] == False:
+            raise BaseException("V2:143 : Vous devez etre connecté pour obtenir la liste des salons.")
+        else:
+            return data
+    
+    @_wrapper
+    def apiConnectTextRoom(self, ID: str = None) -> bool:
         self._send({"type": "CONNECT room@chat", "roomID": ID})
-        if self._recv()["data"]["status"] == True:
+        if self._recv()["status"] == True:
             return True
         else:
-            return False
+            raise BaseException("V2:151 : Impossible de se connecter au salon de discussion.")
     
     @_wrapper
-    def apiLoginAndRegister(self, username: str, password: str) -> bool:
-        self._send({"type": "login", "Username": username, "Password": password})
-        data = self._recv()["data"]
+    def apiSendMessageTextRoom(self, message: str) -> bool:
+        self._send({"type": "send-message", "message": message})
+        """
+        data = self._recv()
+        if data["status"] == True:
+            return True
+        else:
+            raise BaseException("V2:160 : Impossible d'envoyer le message au salon de discussion.")
+        """
+    
+    @_wrapper
+    def apiSyncroTextRoom(self) -> list:
+        """Future api pour restorer les messages manquants"""
+        self._send({"type": "syncro room@chat"})
+        data = self._recv()
+        if data["status"] == True:
+            return True
+        else:
+            raise BaseException("V2:171 : Impossible de synchroniser le salon de discussion.")
+    
+    @_wrapper
+    def apiRegister(self, username: str, password: str) -> bool:
+        self._send({"type": "register", "Username": username, "Password": password})
+        data = self._recv()
         if data.get("status") == True:
             return True
         elif data.get("status") == "already_exists":
             print("Ce username est deja utilisé.")
             return False
+        else:
+            raise BaseException(f"V2:152 : {data.get('status')}")
+
+    @_wrapper
+    def apiLogin(self, username: str, password: str) -> bool:
+        self._send({"type": "login", "Username": username, "Password": password})
+        data = self._recv()
+        if data.get("status") == True:
+            return True
         elif data.get("status") == "404user":
             print("Compte introuvable")
             return False
@@ -149,8 +204,7 @@ class v2:
             print("Mot de passe invalide.")
             return False
         else:
-            print(f"error 42: {data.get('status')}")
-            return False
+            raise BaseException(f"V2:164 : {data.get('status')}")
     
     @_wrapper
     def apiConnectAudioRoom(self, ID) -> bool:
