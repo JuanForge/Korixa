@@ -1,1 +1,1 @@
-msgpack
+cbor2==5.7.1

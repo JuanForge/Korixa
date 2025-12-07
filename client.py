@@ -57,6 +57,9 @@ def viewSalonMenu(user: lifeV2):
 def viewSalon(user: lifeV2, salonName: str, notificationS: notification, cleintLocal):
     def data(user: lifeV2, event: threading.Event):
         try:
+            user.apiListenTextRoom()
+            for i in user.apiSyncroTextRoom():
+                yield str(f"[{anstrip.strip(i['user'])}] {i['datetime'].strftime('%Y-%m-%d %H:%M:%S')} : {anstrip.strip(i['message'])}\n")
             while not event.is_set():
                 #if not user.status():
                 #    yield str(f"\x1b[93m\x1b[40mSystème : Vous avez été déconnecté.\x1b[0m\n")
@@ -67,7 +70,7 @@ def viewSalon(user: lifeV2, salonName: str, notificationS: notification, cleintL
                 #    yield "dict : OK\n"
                 if isinstance(entry, dict) and entry.get("type") == "chunk room@chat":
                     d = dict(entry)
-                    yield str(f"[{anstrip.strip(d['by'])}] {anstrip.strip(d['message'])}\n")
+                    yield str(f"[{anstrip.strip(d['by'])}] {d['datetime'].strftime('%Y-%m-%d %H:%M:%S')} : {anstrip.strip(d['message'])}\n")
                 # else:
                 #     #yield "vide\n"
                 #     user.QueueOUT.put(entry)
@@ -224,10 +227,8 @@ def main():
                                     #    buffer[username] = []
                                     #buffer[username].append(chunk)
                                     data = gestion.add(korixa.decode(chunk["chunk"]), chunk["username"])
-                                    #print(data)
-                                    if not data == None:
-                                        for i in data:
-                                            outAudio.send(i)
+                                    if data:
+                                        outAudio.send(data)
 
                             event = threading.Event()
                             thread = threading.Thread(target=AudioOUT, args=(event, korixa), daemon=True)

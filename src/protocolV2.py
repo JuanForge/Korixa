@@ -160,6 +160,14 @@ class v2:
             return True
         else:
             raise BaseException("V2:151 : Impossible de se connecter au salon de discussion.")
+
+    @_wrapper
+    def apiListenTextRoom(self) -> bool:
+        self._send({"type": "listen room@chat"})
+        if self._recv()["status"] == True:
+            return True
+        else:
+            raise BaseException("Impossible d'écouter le salon de discussion.")
     
     @_wrapper
     def apiSendMessageTextRoom(self, message: str) -> bool:
@@ -173,12 +181,13 @@ class v2:
         """
     
     @_wrapper
-    def apiSyncroTextRoom(self) -> list:
+    def apiSyncroTextRoom(self) -> list[dict]:
         """Future api pour restorer les messages manquants"""
         self._send({"type": "syncro room@chat"})
         data = self._recv()
+        print(data)
         if data["status"] == True:
-            return True
+            return data["history"]
         else:
             raise BaseException("V2:171 : Impossible de synchroniser le salon de discussion.")
     
@@ -191,6 +200,11 @@ class v2:
         elif data.get("status") == "already_exists":
             print("Ce username est deja utilisé.")
             return False
+        elif data.get("status") == "invalid_username":
+            print("Username invalide.")
+            return False
+        elif data.get("status") == "registration_disabled":
+            print("Création de compte désactivée côté serveur.")
         else:
             raise BaseException(f"V2:152 : {data.get('status')}")
 

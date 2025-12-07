@@ -3,4 +3,8 @@ anstrip==0.2.2
 prompt_toolkit==3.0.52
 textual==6.6.0
 notify-py==0.3.43
+# -- audio --
+pyaudio==0.2.14
+numpy==2.3.5
+opuslib==3.0.1
 -r requirements.txt

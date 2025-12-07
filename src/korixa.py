@@ -103,14 +103,99 @@ class audio:
         self.buffer = {}
         self.start_time = None
         self.Queue = {}
-        self.timebloc = 0.100  # 100 ms
-    def add(self, pcm: bytes, username: str):
+        self.timebloc = 0.120  # 100 ms
+    def add(self, pcm: bytes, username: str) -> bytes | None:
         if not self.start_time:
             self.start_time = time.monotonic()
 
         if not username in self.buffer:
             self.Queue[username] = queue.Queue()
             self.buffer[username] = {"chunks": [], "timestamp": time.monotonic()}
+        
+        self.Queue[username].put(pcm)
+        entry = []
+        blacklist = []
+
+
+
+        for user, q in self.Queue.items():
+            if q.qsize() < 5:
+                blacklist.append(q)
+            #if q.qsize() == 0:
+            #    return None
+        
+        for user, q in self.Queue.items():
+            q: queue.Queue
+            print(f"User {user} has {q.qsize()} chunks in queue.")
+            if not q in blacklist:
+                entry.append(q.get_nowait())
+        
+        if entry:
+            return self.korixa.assemblePCM(*entry)
+        else:
+            return None
+
+
+
+        """
+        min_chunks = min(q.qsize() for q in self.Queue.values())
+        max_chunks = max(q.qsize() for q in self.Queue.values())
+        
+
+        if min_chunks <= 4:    #0.050
+            self.timebloc = min(0.001, self.timebloc + 0.010)
+        elif max_chunks >= 8:  #0.200
+            self.timebloc = max(0.000, self.timebloc - 0.010)
+        
+        print(f"Timebloc set to {self.timebloc:.3f} seconds.")
+
+        if time.monotonic() - self.start_time >= self.timebloc:
+            for username, Queue in self.Queue.items():
+                self.start_time = time.monotonic()
+                Queue: queue.Queue
+                username: str
+                print(f"User {username} has {Queue.qsize()} chunks in queue.")
+                try:
+                    entry.append(Queue.get_nowait())
+                except queue.Empty:
+                    continue
+            if entry:
+                return self.korixa.assemblePCM(*entry)
+            else:
+                return None
+        else:
+            return None
+        """
+
+
+
+
+        """
+        if time.monotonic() - self.start_time >= self.timebloc:
+            for username, Queue in self.Queue.items():
+                self.start_time = time.monotonic()
+                Queue: queue.Queue
+                username: str
+                print(f"User {username} has {Queue.qsize()} chunks in queue.")
+                if Queue.qsize() > 5:
+                    Queue.get_nowait()  # 
+                    self.timebloc = max(0.050, self.timebloc - 0.010)
+                elif Queue.qsize() < 2:
+                    self.timebloc = min(0.200, self.timebloc + 0.010)
+                try:
+                    entry.append(Queue.get_nowait())
+                except queue.Empty:
+                    continue
+            if entry:
+                return self.korixa.assemblePCM(*entry)
+            else:
+                return None
+        else:
+            return None
+        """
+
+
+        """
         # self.buffer[username]["chunks"].append(chunk)
         self.Queue[username].put(pcm)
         data: list[list[bytes]] = []
@@ -141,6 +226,7 @@ class audio:
             return out
         else:
             return None
+        """
 
 
 if __name__ == "__main__":

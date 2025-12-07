@@ -1,21 +1,38 @@
 import os
 import ssl
 import json
-import time
-import queue
+#import time
+#import queue
+import string
 import socket
-import orjson
+#import orjson
 import argparse
 import traceback
 import threading
 
 from tqdm import tqdm
 from ssl import SSLContext
+from datetime import timezone
+from datetime import datetime
 
 from src.db import db as dbimport
 from src.VERSION import VERSION
-from src.protocol import client as life
+# from src.protocol import client as life
 from src.protocolV2 import v2 as lifeV2
+
+def caractere(chaine: str) -> bool:
+    valide = string.ascii_letters + string.digits
+    return all(c in valide for c in chaine)
+
+def json_encoder(obj):
+    if isinstance(obj, datetime):
+        return {"__type__": "datetime", "value": obj.isoformat()}
+    raise TypeError(f"Type non pris en charge: {type(obj)}")
+
+def json_decoder(obj):
+    if "__type__" in obj and obj["__type__"] == "datetime":
+        return datetime.fromisoformat(obj["value"])
+    return obj
 
 def send_message(clientLocal, tableChat: dict, tableChatLock, message: str, by: str = None):
     if not by:
@@ -25,14 +42,14 @@ def send_message(clientLocal, tableChat: dict, tableChatLock, message: str, by: 
             key: lifeV2
             value: dict
             try:
-                key.send({"type": "chunk room@chat", "message": message, "by": by}) # {"type": "chunk room@chat", "message": "Bonjour"}
+                key.send({"type": "chunk room@chat", "message": message, "by": by, "datetime": datetime.now(timezone.utc)}) # {"type": "chunk room@chat", "message": "Bonjour"}
             except Exception as e:
                 print(f"29 : Error send message by {by} : {e}")
 
 def handle_client(client: socket.socket, addr, event: threading.Event,
                   debug: bool, db: dict, dbLock: threading.Lock, tableChat: dict,
                   tableChatLock: threading.RLock, contextssl: SSLContext, max_rate,
-                  unpacker_buffer_size): # msgpack
+                  unpacker_buffer_size, args): # msgpack
     #user = None
     userV2 = None
     clientLocal = {"connected": False}
@@ -62,15 +79,21 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
                 continue
             
             elif data["type"] == "register":
-                with dbLock:
-                    if not str(data["Username"]) in db["user"]:
-                        db["user"][str(data["Username"])] = {"Password": str(data["Password"]),
-                                                             "roles": []}
-                        clientLocal["connected"] = True
-                        clientLocal["username"] = str(data["Username"])
-                        userV2.send({"status": True})
-                    else:
-                        userV2.send({"status": "already_exists"})
+                if not args.no_register:
+                    with dbLock:
+                        if 5 >= len(str(data["Username"])) and caractere(str(data["Username"])):
+                            if not str(data["Username"]) in db["user"]:
+                                db["user"][str(data["Username"])] = {"Password": str(data["Password"]),
+                                                                     "roles": []}
+                                clientLocal["connected"] = True
+                                clientLocal["username"] = str(data["Username"])
+                                userV2.send({"status": True})
+                            else:
+                                userV2.send({"status": "already_exists"})
+                        else:
+                            userV2.send({"status": "invalid_username"})
+                else:
+                    userV2.send({"status": "registration_disabled"})
             
             elif data["type"] == "login":
                 with dbLock:
@@ -95,13 +118,12 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
                     userV2.send({"status": False})
             
             elif data["type"] == "CONNECT room@chat":
+                clientLocal["listen"] = False
                 if clientLocal["connected"]:
                     with dbLock:
                         if data["roomID"] != None:
                             if any(salon["id"] == str(data["roomID"]) for salon in db["salon"]):
                                 clientLocal["room@chat"] = str(data["roomID"])
-                                with tableChatLock:
-                                    tableChat[clientLocal["room@chat"]]["userConnected"][userV2] = {} # .append({"user": user})
                                 
                                 userV2.send({"status": True})
 
@@ -118,6 +140,16 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
                             del clientLocal["room@chat"]
                 else:
                     userV2.send({"status": False})
+            
+            elif data["type"] == "listen room@chat":
+                if clientLocal["connected"] and clientLocal.get("room@chat"):
+                    clientLocal["listen"] = True
+                    userV2.send({"status": True})
+                    with tableChatLock:
+                        tableChat[clientLocal["room@chat"]]["userConnected"][userV2] = {} # .append({"user": user})
+                else:
+                    userV2.send({"status": False})
+
                 
             elif data["type"] == "CONNECT room@audio":
                 if clientLocal["connected"]:
@@ -141,7 +173,7 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
                         for key, value in tableChat[clientLocal["room@audio"]]["userConnected"].items():
                             key: lifeV2
                             value: dict
-                            print(f"{userV2} != {key}")
+                            # print(f"{userV2} != {key}")
                             if userV2 != key:
                                 try:
                                     key.send({"type": "AUDIO chunk", "username": clientLocal["username"],
@@ -153,6 +185,14 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
 
             elif data["type"] == "send-message":
                 if clientLocal["connected"]:
+                    with dbLock:
+                        for salon in db["salon"]:
+                            if salon["id"] == clientLocal["room@chat"]:
+                                chat: list = salon["chat"]
+                                chat.append({"user": clientLocal["username"],
+                                             "datetime": datetime.now(timezone.utc),
+                                             "message": str(data["message"])})
+                                break
                     send_message(clientLocal=clientLocal,tableChat=tableChat,
                                  tableChatLock=tableChatLock, message=str(data["message"]))
                     #userV2.send({"status": True})
@@ -162,7 +202,10 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
             
             elif data["type"] == "syncro room@chat":
                 if clientLocal["connected"]:
-                    userV2.send({"status": True})
+                    with dbLock:
+                        for salon in db["salon"]:
+                            if salon["id"] == clientLocal["room@chat"]:
+                                userV2.send({"status": True, "history": salon["chat"]})
                 else:
                     userV2.send({"status": False})
             else:
@@ -176,8 +219,9 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
             if clientLocal.get("room@chat"):
                 send_message(clientLocal, tableChat, tableChatLock,
                              message=f"{clientLocal['username']} nous a quittés.", by="System#0")
-                with tableChatLock:
-                    tableChat[clientLocal["room@chat"]]["userConnected"].pop(userV2, None)
+                if clientLocal.get("listen"):
+                    with tableChatLock:
+                        tableChat[clientLocal["room@chat"]]["userConnected"].pop(userV2, None)
             if debug:
                 print(f"exit for the client : {addr}...")
             
@@ -214,6 +258,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-rooms", type=int, default=100,help="Nombre maximal de personnes dans un même salon.")
     parser.add_argument("--max-connections", type=int, default=4, help="Nombre maximum de clients connectés simultanément.")
     parser.add_argument("--max-rate", type=int, default=768, help="Débit entrant maximal de chaque client en kbps (kilobits par seconde).")
+    parser.add_argument('--no-register', action='store_true', help="Désactive la création de compte.")
     parser.add_argument("--unpacker-buffer-size", type=int, default=65536, help="Taille maximale du buffer MessagePack de chaque client (en octets, 40_000_000).")
     parser.add_argument("--ssl", action="store_true", help="Active le chiffrement TLS.")
     parser.add_argument("--tls13", action="store_true", help="Forcer l’utilisation de TLS 1.3 uniquement (nécessite --ssl).")
@@ -235,11 +280,11 @@ if __name__ == "__main__":
         with open("db.json", "w") as f:
             f.write(json.dumps(dbimport().db, indent=4))
     with open("db.json", "r") as f:
-        db = json.loads(f.read())
+        db = json.loads(f.read(), object_hook=json_decoder)
     dbLock = threading.RLock()
 
 
-    print("ini table@chat...")
+    print("ini table@chat|audio...")
     tableChat = {}
     tableChatLock = threading.RLock()
     for salon in db["salon"]:
@@ -264,7 +309,7 @@ if __name__ == "__main__":
                         if len(threads)+1 <= (args.max_connections):
                             thread = threading.Thread(target=handle_client, args=(conn, addr, event, args.debug, db, dbLock,
                                                                                   tableChat, tableChatLock, contextssl, args.max_rate,
-                                                                                  args.unpacker_buffer_size), daemon=True)
+                                                                                  args.unpacker_buffer_size, args), daemon=True)
                             thread.start()
                             threads.append(thread)
                         else:
@@ -286,5 +331,5 @@ if __name__ == "__main__":
         pass
     finally:
         with open("db.json", "w") as f:
-            f.write(json.dumps(db, indent=4))
+            f.write(json.dumps(db, indent=4, default=json_encoder))
         print("Server stopped.")

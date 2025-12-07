@@ -1,7 +1,7 @@
 from typing import Literal
 class VERSION:
-    VERSION = "0.0.1-alpha"
-    BUILD = "2025.11.28:22.10"
+    VERSION = "0.0.2-alpha"
+    BUILD = "2025.12.07:23.40"
     RELEASE = 'DEV'
 
     @staticmethod
