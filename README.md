@@ -73,10 +73,10 @@ python3 client.py --server 127.0.0.1:12347
 
 # 📂 Index des serveurs Korixa
 
-|🌐 Adresse                                                           |🖊️ Signé par|🔒 TLS|🏷️ Nom du serveur|📡 Type de connexion|⏱️ Temps de réponse|status|
-|---------------------------------------------------------------------|------------|------|-----------------|--------------------|--------------------|-----|
-| zhhfgkv4ley42fb2plut6j5raecxq2bu4lnlc4wwo3os724oea6fzjqd.onion:12347| JuanForge  |✅ Oui| Tor hidden main | tor + TLS + TCP    |X ms                |Up   |
-| X                                                                   | X          |❌ Non| X               | X                  |X ms                |Down |
+|🌐 Adresse                                                           |🖊️ Signé par|🔒 TLS|🏷️ Nom du serveur|📡 Type de connexion|📌 Version |⏱️ Temps de réponse|status|
+|---------------------------------------------------------------------|------------|------|-----------------|--------------------|-----------|--------------------|-----|
+| zhhfgkv4ley42fb2plut6j5raecxq2bu4lnlc4wwo3os724oea6fzjqd.onion:12347| JuanForge  |✅ Oui| Tor hidden main | tor + TLS + TCP    |0.0.1-alpha|X ms                |Up   |
+| X                                                                   | X          |❌ Non| X               | X                  |0.0.1-alpha|X ms                |Down |
 
 
 

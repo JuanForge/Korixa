@@ -20,7 +20,7 @@ class v2:
         Cette version du protocole est physiquement limitée a ce que chaque bloc ne dépasse pas 4 Go.
         """
         self.sock = sock
-        self.debug = True
+        self.debug = False
         self.buffer = b""
         self.lock = threading.RLock() # RLock # Lock
         self.lockRecv = threading.RLock()

@@ -7,8 +7,11 @@ opus_frame_limits = {
     # 44100: {"min_frame": 110,  "max_frame": 5292, "min_ms": 2.5,  "max_ms": 120},
     48000: {"min_frame": 120,  "max_frame": 5760, "min_ms": 2.5,  "max_ms": 120}
 }
+import time
+import queue
 import pyaudio
 import threading
+import numpy as np
 from opuslib import Encoder, Decoder
 class korixa:
     def __init__(self):
@@ -78,10 +81,73 @@ class korixa:
     
     def updateBITRATE(self, bitrate: int):
         self.BITRATE = bitrate
+        
+    
+    def assemblePCM(self, *pcms: bytes) -> bytes:
+        arrays = [np.frombuffer(pcm, dtype=np.int16) for pcm in pcms]
+    
+        max_len = max(len(arr) for arr in arrays)
+    
+        arrays = [np.pad(arr, (0, max_len - len(arr)), 'constant') if len(arr) < max_len else arr
+                  for arr in arrays]
+    
+        mixed = sum(arr.astype(int) for arr in arrays)
+    
+        mixed = np.clip(mixed, -32768, 32767)
+    
+        return mixed.astype(np.int16).tobytes()
 
+class audio:
+    def __init__(self, korixa_instance: korixa = None):
+        self.korixa = korixa_instance
+        self.buffer = {}
+        self.start_time = None
+        self.Queue = {}
+        self.timebloc = 0.100  # 100 ms
+    def add(self, pcm: bytes, username: str):
+        if not self.start_time:
+            self.start_time = time.monotonic()
+
+        if not username in self.buffer:
+            self.Queue[username] = queue.Queue()
+            self.buffer[username] = {"chunks": [], "timestamp": time.monotonic()}
+        # self.buffer[username]["chunks"].append(chunk)
+        self.Queue[username].put(pcm)
+        data: list[list[bytes]] = []
+        if time.monotonic() - self.start_time >= self.timebloc:
+            self.start_time = time.monotonic()
+            #self.timebloc = 0.110
+            for username, Queue in self.Queue.items():
+                entry = []
+                Queue: queue.Queue
+                username: str
+                print(f"User {username} has {Queue.qsize()} chunks in queue.")
+                while not Queue.empty():
+                    entry.append(Queue.get_nowait())
+                if entry:
+                    data.append(entry)
+        out = []
+        if data:
+            max_len = max(len(user_chunks) for user_chunks in data)
+        
+            for index in range(max_len):
+                entry = []
+                for user_chunks in data:
+                    if index < len(user_chunks):
+                        entry.append(user_chunks[index])
+                
+                if entry:
+                    out.append(self.korixa.assemblePCM(*entry))
+            return out
+        else:
+            return None
 
 
 if __name__ == "__main__":
+    session = audio()
+    session.add(b"test1", "user1")
+    session.add(b"test2", "user1")
+
     import time
 
     kor = korixa()

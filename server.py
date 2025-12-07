@@ -1,5 +1,6 @@
 import os
 import ssl
+import json
 import time
 import queue
 import socket
@@ -11,7 +12,7 @@ import threading
 from tqdm import tqdm
 from ssl import SSLContext
 
-from src.db import db
+from src.db import db as dbimport
 from src.VERSION import VERSION
 from src.protocol import client as life
 from src.protocolV2 import v2 as lifeV2
@@ -140,10 +141,13 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
                         for key, value in tableChat[clientLocal["room@audio"]]["userConnected"].items():
                             key: lifeV2
                             value: dict
-                            try:
-                                key.send({"type": "AUDIO chunk", "chunk": data["chunk"], "rate": data["RATE"], "frame": data["FRAME"]})
-                            except Exception as e:
-                                print(f"Error sending audio chunk: {e}")
+                            print(f"{userV2} != {key}")
+                            if userV2 != key:
+                                try:
+                                    key.send({"type": "AUDIO chunk", "username": clientLocal["username"],
+                                              "chunk": data["chunk"], "rate": data["RATE"], "frame": data["FRAME"]})
+                                except Exception as e:
+                                    print(f"Error sending audio chunk: {e}")
                 else:
                     pass
 
@@ -227,11 +231,11 @@ if __name__ == "__main__":
         contextssl = None
     
     print("Load DB...")
-    if not os.path.isfile("db.db"):
-        with open("db.db", "wb") as f:
-            f.write(orjson.dumps(db().db))
-    with open("db.db", "rb") as f:
-        db = orjson.loads(f.read())
+    if not os.path.isfile("db.json"):
+        with open("db.json", "w") as f:
+            f.write(json.dumps(dbimport().db, indent=4))
+    with open("db.json", "r") as f:
+        db = json.loads(f.read())
     dbLock = threading.RLock()
 
 
@@ -281,5 +285,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     finally:
-        with open("db.db", "wb") as f:
-            f.write(orjson.dumps(db))
+        with open("db.json", "w") as f:
+            f.write(json.dumps(db, indent=4))
+        print("Server stopped.")

@@ -2,6 +2,7 @@
 
 
 audio.py
+audio2.py
 benchmark.py
 server.csr
 ca.key
@@ -15,6 +16,7 @@ cli3.py
 cli4.py
 cli5.py
 dev*.py
+db.json
 db.db
 
 # Byte-compiled / optimized / DLL files
