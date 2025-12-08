@@ -11,6 +11,7 @@ La compatibilité, la sécurité et les performances peuvent encore évoluer.
 -  [🚀 - Lancer un serveur Korixa](#-lancer-un-serveur-korixa)
 -  [🔌 - Connexion au serveur Korixa](#-Se-connecter-à-un-serveur-Korixa)
 -  [ℹ️ - À propos de Korixa](#ℹ%EF%B8%8F-à-propos-de-korixa)
+-  [📷 - Assets](#-Assets)
 -  [❓ - FAQ](#-FAQ)
 
 # 💻 Installation
@@ -112,6 +113,11 @@ Korixa est conçu pour offrir une communication privée, robuste et protégée c
 * Certificats serveur personnalisés
 * Protection contre l’écoute réseau et le MITM (si vous maîtrisez vos certs)
 * Compatible SOCKS5, reverse proxy et services cachés
+
+# 📷 Assets
+![Screenshot](./Assets/liste-1.png)
+![Screenshot](./Assets/chat-1.png)
+
 # ❓ FAQ
 
 ### **1. Sur quels réseaux peut-on utiliser Korixa ?**
@@ -145,7 +151,7 @@ Oui. Il suffit d’appuyer sur **CTRL+Q** pour revenir à la liste des salons et
 
 ### **7. L’historique des messages est-il disponible ?**
 
-Pour le moment, Korixa est **temps réel uniquement**. L’historique sera ajouté prochainement.
+Oui. Korixa conserve l’historique des messages pour chaque salon, de manière locale sur le serveur, ce qui permet de ne rien rater même si vous vous déconnectez ou rejoignez plus tard.
 
 ### **8. Sur quelles plateformes fonctionne Korixa ?**
 
@@ -178,8 +184,7 @@ Oui. Il suffit de **ne pas ajouter `--ssl`** lors du lancement du serveur.
 
 ### **13. Korixa supporte-t-il l’audio ou la vidéo ?**
 
-Pour le moment, uniquement le **texte**.
-Un support des salons audio est en test pour le futur.
+Pour le moment, uniquement le texte. Le support de l’audio est disponible mais reste instable, et les salons vidéo sont prévus pour le futur.
 
 ### **14. Faut-il des droits administrateur ?**
 
@@ -222,3 +227,6 @@ Oui, c’est une évolution prévue.
 Le chiffrement de bout en bout pourrait être ajouté dans une version future de Korixa.
 L’idée est de permettre la création de salons privés dédiés, où seuls les deux participants possèdent les clés de déchiffrement.
 Dans ce mode, le serveur ne verrait jamais le contenu, seulement des messages chiffrés, garantissant une confidentialité totale entre utilisateurs.
+
+### **23 : Es que Korixa est-il décentralisé ?**
+Non. Chaque serveur est indépendant et auto-hébergé, mais il n’y a pas de réseau distribué entre serveurs. Une décentralisation complète pourrait être ajoutée dans une future version.
