@@ -62,8 +62,8 @@ def handle_client(client: socket.socket, addr, event: threading.Event,
         
         client.settimeout(20)
         
-        if client.recv(32) == b"PING":
-            client.sendall(b"PONG")
+        #if client.recv(32) == b"PING":
+        #    client.sendall(b"PONG")
         
         #user = life(sock=client, QueueIN=queue.Queue(), QueueOUT=queue.Queue(), boot=True, debug=debug, type="server", kbps=max_rate, unpacker_buffer_size=unpacker_buffer_size)
         userV2 = lifeV2(sock=client)

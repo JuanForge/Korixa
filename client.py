@@ -171,74 +171,71 @@ def main():
             client = context.wrap_socket(client, server_hostname=HOST)
         
         client.settimeout(None)
-
-        client.sendall(b"PING")
-        if client.recv(len(b"PONG")) == b"PONG":
-            #user = life(sock=client, QueueIN=queue.Queue(), QueueOUT=queue.Queue(), boot=True, debug=args.debug, type="client")
-            user = lifeV2(sock=client)
-            if user.apiVersion() != VERSION.VERSION:
-                raise errors.ClientIncompatibleServerVersion()
-
-            event_keepalive = threading.Event()
-            thread_keepalive = threading.Thread(target=keepalive, args=(user,event_keepalive), daemon=True)
-            thread_keepalive.start()
-
-            result = button_dialog(
-                title='Bienvenue',
-                text='Que voulez-vous faire ?',
-                buttons=[
-                    ('Login', 'login'),
-                    ('Register', 'register'),
-                ],
-            ).run()
-            username = input("Username >")
-            clientLocal["username"] = username
-            password = prompt("Password >", is_password=True)
-
-            if result == "login":
-                if not user.apiLogin(username, password):
-                    print("Échec de la connexion.")
-                    sys.exit()
-            elif result == "register":
-                if not user.apiRegister(username, password):
-                    print("Échec de l’enregistrement.")
-                    sys.exit()
-            
-            while True:
-                ID, name, type = viewSalonMenu(user)
-                if ID:
-                    if type == "chat":
-                        user.apiConnectTextRoom(ID)
-                        #user.apiSyncroTextRoom()
-                        viewSalon(user, name, notificationS, clientLocal)
-                        user.apiConnectTextRoom(None)
-                    elif type == "audio":
-                        if user.apiConnectAudioRoom(ID):
-                            #buffer = {}
-                            korixa.BITRATE = 48000
-
-                            def AudioOUT(Event: threading.Event, korixa: app.korixa):
-                                outAudio = korixa.AudioOUT()
-                                gestion = app.audio(korixa)
-                                while not Event.is_set():
-                                    chunk = user.recv()
-                                    print("Waiting audio chunk...")
-                                    #if not username in buffer:
-                                    #    buffer[username] = []
-                                    #buffer[username].append(chunk)
-                                    data = gestion.add(korixa.decode(chunk["chunk"]), chunk["username"])
-                                    if data:
-                                        outAudio.send(data)
-
-                            event = threading.Event()
-                            thread = threading.Thread(target=AudioOUT, args=(event, korixa), daemon=True)
-                            thread.start()
-                            for chunk in korixa.AudioIN():
-                                chunk = korixa.encode(chunk)
-                                user.apiSendAudioChunk(chunk, korixa.RATE, 1, korixa.FRAME)
-
-                        else:
-                            print("Échec de la connexion au salon audio.")
+        #user = life(sock=client, QueueIN=queue.Queue(), QueueOUT=queue.Queue(), boot=True, debug=args.debug, type="client")
+        user = lifeV2(sock=client)
+        if user.apiVersion() != VERSION.VERSION:
+            raise errors.ClientIncompatibleServerVersion()
+        
+        event_keepalive = threading.Event()
+        thread_keepalive = threading.Thread(target=keepalive, args=(user,event_keepalive), daemon=True)
+        thread_keepalive.start()
+        
+        result = button_dialog(
+            title='Bienvenue',
+            text='Que voulez-vous faire ?',
+            buttons=[
+                ('Login', 'login'),
+                ('Register', 'register'),
+            ],
+        ).run()
+        username = input("Username >")
+        clientLocal["username"] = username
+        password = prompt("Password >", is_password=True)
+        
+        if result == "login":
+            if not user.apiLogin(username, password):
+                print("Échec de la connexion.")
+                sys.exit()
+        elif result == "register":
+            if not user.apiRegister(username, password):
+                print("Échec de l’enregistrement.")
+                sys.exit()
+        
+        while True:
+            ID, name, type = viewSalonMenu(user)
+            if ID:
+                if type == "chat":
+                    user.apiConnectTextRoom(ID)
+                    #user.apiSyncroTextRoom()
+                    viewSalon(user, name, notificationS, clientLocal)
+                    user.apiConnectTextRoom(None)
+                elif type == "audio":
+                    if user.apiConnectAudioRoom(ID):
+                        #buffer = {}
+                        korixa.BITRATE = 48000
+                            
+                        def AudioOUT(Event: threading.Event, korixa: app.korixa):
+                            outAudio = korixa.AudioOUT()
+                            gestion = app.audio(korixa)
+                            while not Event.is_set():
+                                chunk = user.recv()
+                                print("Waiting audio chunk...")
+                                #if not username in buffer:
+                                #    buffer[username] = []
+                                #buffer[username].append(chunk)
+                                data = gestion.add(korixa.decode(chunk["chunk"]), chunk["username"])
+                                if data:
+                                    outAudio.send(data)
+                        
+                        event = threading.Event()
+                        thread = threading.Thread(target=AudioOUT, args=(event, korixa), daemon=True)
+                        thread.start()
+                        for chunk in korixa.AudioIN():
+                            chunk = korixa.encode(chunk)
+                            user.apiSendAudioChunk(chunk, korixa.RATE, 1, korixa.FRAME)
+                        
+                    else:
+                        print("Échec de la connexion au salon audio.")
                 else:
                     sys.exit()
     except KeyboardInterrupt:
