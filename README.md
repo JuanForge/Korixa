@@ -16,6 +16,18 @@ La compatibilité, la sécurité et les performances peuvent encore évoluer.
 
 # 💻 Installation
 ```bash
+VERSION="0.0.2-alpha"
+```
+```bash
+git clone --branch "$VERSION" --depth 1 https://github.com/JuanForge/Korixa.git
+cd Korixa
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-server.txt
+```
+
+# 🔧 Installation développeur
+```bash
 git clone https://github.com/JuanForge/Korixa.git
 cd Korixa
 python3 -m venv .venv
