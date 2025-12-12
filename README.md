@@ -66,16 +66,6 @@ python3 server.py --host 127.0.0.1 --port 12347 --max-connections 16 --ssl --tls
 
 Le client Korixa permet de rejoindre un serveur en quelques secondes, que ce soit en local, en réseau classique ou via un service caché.
 
-
-```bash
-git clone https://github.com/JuanForge/Korixa.git
-cd Korixa
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-client.txt
-```
-
-
 ### 📜 Certificat du serveur (CA) — Important avant toute connexion TLS
 
 Si le serveur utilise SSL/TLS et qu’il n’est pas signé par JuanForge, vous devez importer la Certificate Authority (CA) fournie par l’administrateur du serveur dans [ authority.pem](./authority.pem).
@@ -135,7 +125,7 @@ Korixa est conçu pour offrir une communication privée, robuste et protégée c
 * Communications sécurisées via TLS
 * Certificats serveur personnalisés
 * Protection contre l’écoute réseau et le MITM (si vous maîtrisez vos certs)
-* Compatible SOCKS5, reverse proxy et services cachés
+* Compatible SOCKS5 et services cachés
 
 # 📷 Assets
 ![Screenshot](./Assets/liste-1.png)
